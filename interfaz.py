@@ -150,6 +150,14 @@ with st.sidebar:
     )
     anio = st.slider("Año", 2000, 2025, 2023)
     semestre = st.selectbox("Semestre", [1, 2])
+    opacity = st.slider(
+        "Opacidad de la capa",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.6,
+        step=0.1,
+        help="Ajusta la transparencia de la capa para ver el mapa base"
+    )
 
 # PROCESAMIENTO
 imagen_indice = obtener_indice(anio, semestre, indice)
@@ -178,7 +186,8 @@ folium.TileLayer(
     tiles=tiles["tile_fetcher"].url_format,
     attr="Google Earth Engine",
     name=indice,
-    overlay=True
+    overlay=True,
+    opacity=opacity
 ).add_to(mapa)
 
 folium.LayerControl().add_to(mapa)
