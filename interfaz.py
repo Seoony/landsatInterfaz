@@ -7,36 +7,69 @@ import json
 import tempfile
 
 # INICIALIZACIÓN GOOGLE EARTH ENGINE
-# Supports GOOGLE_APPLICATION_CREDENTIALS as:
-# 1. File path to JSON file
-# 2. JSON string (for Streamlit secrets/environment variables)
+# Supports multiple authentication methods:
+# 1. OAuth2 credentials from environment variables (client_id, client_secret, refresh_token)
+# 2. Service account JSON file path
+# 3. Service account JSON string
+# 4. Default credentials (for local development)
 try:
-    gcp_credentials = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    initialized = False
     
-    if gcp_credentials:
-        # Check if it's a file path
-        if os.path.exists(gcp_credentials):
-            # It's a file path
-            credentials = ee.ServiceAccountCredentials(None, gcp_credentials)
-            ee.Initialize(credentials, project='fourth-return-458106-r5')
-        else:
-            # Try to parse it as JSON string
-            try:
-                service_account_json = json.loads(gcp_credentials)
-                # Create temporary file from JSON string
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                    json.dump(service_account_json, f)
-                    temp_path = f.name
-                credentials = ee.ServiceAccountCredentials(None, temp_path)
-                ee.Initialize(credentials, project='fourth-return-458106-r5')
-            except (json.JSONDecodeError, ValueError):
-                # Not valid JSON, try default initialization
-                ee.Initialize(project='fourth-return-458106-r5')
-    else:
-        # No credentials provided, use default
+    # Method 1: OAuth2 credentials from separate environment variables
+    client_id = os.getenv('EE_CLIENT_ID') or os.getenv('CLIENT_ID')
+    client_secret = os.getenv('EE_CLIENT_SECRET') or os.getenv('CLIENT_SECRET')
+    refresh_token = os.getenv('EE_REFRESH_TOKEN') or os.getenv('REFRESH_TOKEN')
+    
+    if client_id and client_secret and refresh_token:
+        # Build OAuth2 credentials JSON
+        oauth_credentials = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "type": "authorized_user"
+        }
+        # Create temporary credentials file
+        credentials_dir = os.path.join(os.path.expanduser('~'), '.config', 'earthengine')
+        os.makedirs(credentials_dir, exist_ok=True)
+        credentials_path = os.path.join(credentials_dir, 'credentials')
+        with open(credentials_path, 'w') as f:
+            json.dump(oauth_credentials, f)
         ee.Initialize(project='fourth-return-458106-r5')
+        initialized = True
+    
+    # Method 2: Service account file path or JSON string
+    if not initialized:
+        gcp_credentials = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+        
+        if gcp_credentials:
+            # Check if it's a file path
+            if os.path.exists(gcp_credentials):
+                # It's a file path
+                credentials = ee.ServiceAccountCredentials(None, gcp_credentials)
+                ee.Initialize(credentials, project='fourth-return-458106-r5')
+                initialized = True
+            else:
+                # Try to parse it as JSON string
+                try:
+                    service_account_json = json.loads(gcp_credentials)
+                    # Create temporary file from JSON string
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                        json.dump(service_account_json, f)
+                        temp_path = f.name
+                    credentials = ee.ServiceAccountCredentials(None, temp_path)
+                    ee.Initialize(credentials, project='fourth-return-458106-r5')
+                    initialized = True
+                except (json.JSONDecodeError, ValueError):
+                    pass
+    
+    # Method 3: Default credentials (for local development with earthengine authenticate)
+    if not initialized:
+        ee.Initialize(project='fourth-return-458106-r5')
+        initialized = True
+        
 except Exception as e:
     st.error(f"Error initializing Google Earth Engine: {e}")
+    st.info("Please set EE_CLIENT_ID, EE_CLIENT_SECRET, and EE_REFRESH_TOKEN in Streamlit secrets.")
     st.stop()
 
 # ZONA DE ESTUDIO (ASSET)
