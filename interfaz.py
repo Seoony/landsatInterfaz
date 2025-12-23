@@ -3,15 +3,37 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 import os
+import json
+import tempfile
 
 # INICIALIZACIÓN GOOGLE EARTH ENGINE
-# Try to initialize with service account if available, otherwise use default credentials
+# Supports GOOGLE_APPLICATION_CREDENTIALS as:
+# 1. File path to JSON file
+# 2. JSON string (for Streamlit secrets/environment variables)
 try:
-    service_account_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-    if service_account_path and os.path.exists(service_account_path):
-        credentials = ee.ServiceAccountCredentials(None, service_account_path)
-        ee.Initialize(credentials, project='fourth-return-458106-r5')
+    gcp_credentials = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    
+    if gcp_credentials:
+        # Check if it's a file path
+        if os.path.exists(gcp_credentials):
+            # It's a file path
+            credentials = ee.ServiceAccountCredentials(None, gcp_credentials)
+            ee.Initialize(credentials, project='fourth-return-458106-r5')
+        else:
+            # Try to parse it as JSON string
+            try:
+                service_account_json = json.loads(gcp_credentials)
+                # Create temporary file from JSON string
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                    json.dump(service_account_json, f)
+                    temp_path = f.name
+                credentials = ee.ServiceAccountCredentials(None, temp_path)
+                ee.Initialize(credentials, project='fourth-return-458106-r5')
+            except (json.JSONDecodeError, ValueError):
+                # Not valid JSON, try default initialization
+                ee.Initialize(project='fourth-return-458106-r5')
     else:
+        # No credentials provided, use default
         ee.Initialize(project='fourth-return-458106-r5')
 except Exception as e:
     st.error(f"Error initializing Google Earth Engine: {e}")
