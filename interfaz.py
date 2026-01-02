@@ -6,85 +6,51 @@ import os
 import json
 import tempfile
 
+# ===============================
 # INICIALIZACIÓN GOOGLE EARTH ENGINE
-# Supports multiple authentication methods:
-# 1. OAuth2 credentials from environment variables (client_id, client_secret, refresh_token)
-# 2. Service account JSON file path
-# 3. Service account JSON string
-# 4. Default credentials (for local development)
+# ===============================
 try:
     initialized = False
-    
-    # Method 1: OAuth2 credentials from separate environment variables
+
     client_id = os.getenv('EE_CLIENT_ID') or os.getenv('CLIENT_ID')
     client_secret = os.getenv('EE_CLIENT_SECRET') or os.getenv('CLIENT_SECRET')
     refresh_token = os.getenv('EE_REFRESH_TOKEN') or os.getenv('REFRESH_TOKEN')
-    
+
     if client_id and client_secret and refresh_token:
-        # Build OAuth2 credentials JSON
         oauth_credentials = {
             "client_id": client_id,
             "client_secret": client_secret,
             "refresh_token": refresh_token,
             "type": "authorized_user"
         }
-        # Create temporary credentials file
         credentials_dir = os.path.join(os.path.expanduser('~'), '.config', 'earthengine')
         os.makedirs(credentials_dir, exist_ok=True)
-        credentials_path = os.path.join(credentials_dir, 'credentials')
-        with open(credentials_path, 'w') as f:
+        with open(os.path.join(credentials_dir, 'credentials'), 'w') as f:
             json.dump(oauth_credentials, f)
         ee.Initialize(project='fourth-return-458106-r5')
         initialized = True
-    
-    # Method 2: Service account file path or JSON string
-    if not initialized:
-        gcp_credentials = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-        
-        if gcp_credentials:
-            # Check if it's a file path
-            if os.path.exists(gcp_credentials):
-                # It's a file path
-                credentials = ee.ServiceAccountCredentials(None, gcp_credentials)
-                ee.Initialize(credentials, project='fourth-return-458106-r5')
-                initialized = True
-            else:
-                # Try to parse it as JSON string
-                try:
-                    service_account_json = json.loads(gcp_credentials)
-                    # Create temporary file from JSON string
-                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                        json.dump(service_account_json, f)
-                        temp_path = f.name
-                    credentials = ee.ServiceAccountCredentials(None, temp_path)
-                    ee.Initialize(credentials, project='fourth-return-458106-r5')
-                    initialized = True
-                except (json.JSONDecodeError, ValueError):
-                    pass
-    
-    # Method 3: Default credentials (for local development with earthengine authenticate)
+
     if not initialized:
         ee.Initialize(project='fourth-return-458106-r5')
         initialized = True
-        
+
 except Exception as e:
     st.error(f"Error initializing Google Earth Engine: {e}")
-    st.info("Please set EE_CLIENT_ID, EE_CLIENT_SECRET, and EE_REFRESH_TOKEN in Streamlit secrets.")
     st.stop()
 
-# ZONA DE ESTUDIO (ASSET)
+# ===============================
+# ZONA DE ESTUDIO
+# ===============================
 zona_estudio = ee.FeatureCollection(
     "projects/fourth-return-458106-r5/assets/uchumayo"
 ).geometry()
 
-
-# FUNCIÓN PARA OBTENER ÍNDICES
-def obtener_indice(anio, semestre, indice):
-    mes_inicio = 1 if semestre == 1 else 7
-    mes_fin = 6 if semestre == 1 else 12
-
-    fecha_inicio = ee.Date.fromYMD(anio, mes_inicio, 1)
-    fecha_fin = ee.Date.fromYMD(anio, mes_fin, 28)
+# ===============================
+# FUNCIÓN PARA OBTENER ÍNDICE (AÑO COMPLETO)
+# ===============================
+def obtener_indice(anio, indice):
+    fecha_inicio = ee.Date.fromYMD(anio, 1, 1)
+    fecha_fin = ee.Date.fromYMD(anio, 12, 31)
 
     coleccion = ee.ImageCollection(
         'LANDSAT/LT05/C02/T1_L2' if anio <= 2011
@@ -137,38 +103,44 @@ def obtener_indice(anio, semestre, indice):
         img = imagen.normalizedDifference(['NIR', 'RED'])
 
     return img.rename(indice).clip(zona_estudio)
+# ===============================
+# ESTADISTICAS E INTEPRETACION
+# ===============================
+def estadisticas_indice(imagen):
+    stats = imagen.reduceRegion(
+        reducer=ee.Reducer.mean()
+            .combine(ee.Reducer.min(), '', True)
+            .combine(ee.Reducer.max(), '', True),
+        geometry=zona_estudio,
+        scale=30,
+        maxPixels=1e9
+    )
+    return stats
 
+
+# ===============================
 # INTERFAZ STREAMLIT
+# ===============================
 st.set_page_config(layout="wide")
-st.title("Visualizador de Índices Landsat – Río Chili")
+st.title("Comparación de Índices Landsat – Río Chili")
 
 with st.sidebar:
-    st.header("Parámetros")
     indice = st.selectbox(
         "Índice espectral",
         ['NDVI', 'SAVI', 'EVI', 'GNDVI', 'LSWI', 'NDWI', 'MNDWI']
     )
-    anio = st.slider("Año", 2000, 2025, 2023)
-    semestre = st.selectbox("Semestre", [1, 2])
-    opacity = st.slider(
-        "Opacidad de la capa",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.6,
-        step=0.1,
-        help="Ajusta la transparencia de la capa para ver el mapa base"
-    )
 
-# PROCESAMIENTO
-imagen_indice = obtener_indice(anio, semestre, indice)
+    anio_1 = st.selectbox("Año 1", range(2000, 2026), index=23)
+    anio_2 = st.selectbox("Año 2", range(2000, 2026), index=20)
+    anio_3 = st.selectbox("Año 3", range(2000, 2026), index=17)
 
+    opacity = st.slider("Opacidad", 0.0, 1.0, 0.6, 0.1)
 
-# MAPA
-mapa = folium.Map(
-    location=[-16.42, -71.54],
-    zoom_start=12,
-    tiles="OpenStreetMap"
-)
+# ===============================
+# MAPAS EN PARALELO
+# ===============================
+anios = [anio_1, anio_2, anio_3]
+columnas = st.columns(3)
 
 vis_params = {
     "NDVI": {"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
@@ -180,16 +152,48 @@ vis_params = {
     "MNDWI":{"min": -0.5, "max": 0.8, "palette": ["white", "lightblue", "darkblue"]}
 }
 
-tiles = imagen_indice.getMapId(vis_params[indice])
+for col, anio in zip(columnas, anios):
+    with col:
+        st.subheader(f"{indice} – {anio}")
 
-folium.TileLayer(
-    tiles=tiles["tile_fetcher"].url_format,
-    attr="Google Earth Engine",
-    name=indice,
-    overlay=True,
-    opacity=opacity
-).add_to(mapa)
+        imagen = obtener_indice(anio, indice)
+        tiles = imagen.getMapId(vis_params[indice])
 
-folium.LayerControl().add_to(mapa)
+        mapa = folium.Map(
+            location=[-16.42, -71.54],
+            zoom_start=11,
+            tiles="OpenStreetMap"
+        )
 
-st_folium(mapa, width=1400, height=500)
+        folium.TileLayer(
+            tiles=tiles["tile_fetcher"].url_format,
+            attr="Google Earth Engine",
+            overlay=True,
+            opacity=opacity
+        ).add_to(mapa)
+
+        st_folium(
+            mapa,
+            width=450,
+            height=380,
+            key=f"mapa_{indice}_{anio}"
+        )
+
+        # ===============================
+        # DATOS CUANTITATIVOS
+        # ===============================
+        stats = estadisticas_indice(imagen).getInfo()
+
+        promedio = stats[indice + '_mean']
+        minimo = stats[indice + '_min']
+        maximo = stats[indice + '_max']
+
+
+        st.markdown(
+            f"""
+            **{indice} promedio:** {promedio:.3f}  
+            **Valor mínimo:** {minimo:.3f}  
+            **Valor máximo:** {maximo:.3f}  
+
+            """
+        )
