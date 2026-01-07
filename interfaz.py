@@ -4,14 +4,11 @@ import folium
 from streamlit_folium import st_folium
 import os
 import json
-import tempfile
 
 # ===============================
 # INICIALIZACIÓN GOOGLE EARTH ENGINE
 # ===============================
 try:
-    initialized = False
-
     client_id = os.getenv('EE_CLIENT_ID') or os.getenv('CLIENT_ID')
     client_secret = os.getenv('EE_CLIENT_SECRET') or os.getenv('CLIENT_SECRET')
     refresh_token = os.getenv('EE_REFRESH_TOKEN') or os.getenv('REFRESH_TOKEN')
@@ -23,16 +20,14 @@ try:
             "refresh_token": refresh_token,
             "type": "authorized_user"
         }
-        credentials_dir = os.path.join(os.path.expanduser('~'), '.config', 'earthengine')
+        credentials_dir = os.path.join(
+            os.path.expanduser('~'), '.config', 'earthengine'
+        )
         os.makedirs(credentials_dir, exist_ok=True)
         with open(os.path.join(credentials_dir, 'credentials'), 'w') as f:
             json.dump(oauth_credentials, f)
-        ee.Initialize(project='fourth-return-458106-r5')
-        initialized = True
 
-    if not initialized:
-        ee.Initialize(project='fourth-return-458106-r5')
-        initialized = True
+    ee.Initialize(project='fourth-return-458106-r5')
 
 except Exception as e:
     st.error(f"Error initializing Google Earth Engine: {e}")
@@ -46,8 +41,32 @@ zona_estudio = ee.FeatureCollection(
 ).geometry()
 
 # ===============================
-# FUNCIÓN PARA OBTENER ÍNDICE (AÑO COMPLETO)
+# DEFINICIÓN DE ÍNDICES
 # ===============================
+INDICES = {
+    "NDVI": lambda img: img.normalizedDifference(['NIR', 'RED']),
+    "SAVI": lambda img: img.expression(
+        '(NIR - RED) / (NIR + RED + 0.5) * 1.5',
+        {'NIR': img.select('NIR'), 'RED': img.select('RED')}
+    ),
+    "EVI": lambda img: img.expression(
+        '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
+        {
+            'NIR': img.select('NIR'),
+            'RED': img.select('RED'),
+            'BLUE': img.select('BLUE')
+        }
+    ),
+    "GNDVI": lambda img: img.normalizedDifference(['NIR', 'GREEN']),
+    "LSWI": lambda img: img.normalizedDifference(['NIR', 'SWIR1']),
+    "NDWI": lambda img: img.normalizedDifference(['GREEN', 'NIR']),
+    "MNDWI": lambda img: img.normalizedDifference(['GREEN', 'SWIR1'])
+}
+
+# ===============================
+# OBTENER IMAGEN (CACHEADA)
+# ===============================
+@st.cache_data(show_spinner=False)
 def obtener_indice(anio, indice):
     fecha_inicio = ee.Date.fromYMD(anio, 1, 1)
     fecha_fin = ee.Date.fromYMD(anio, 12, 31)
@@ -75,39 +94,17 @@ def obtener_indice(anio, indice):
 
     imagen = imagen.select(bandas_origen).rename(bandas_std)
 
-    if indice == 'NDVI':
-        img = imagen.normalizedDifference(['NIR', 'RED'])
-    elif indice == 'SAVI':
-        img = imagen.expression(
-            '(NIR - RED) / (NIR + RED + 0.5) * 1.5',
-            {'NIR': imagen.select('NIR'), 'RED': imagen.select('RED')}
-        )
-    elif indice == 'EVI':
-        img = imagen.expression(
-            '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
-            {
-                'NIR': imagen.select('NIR'),
-                'RED': imagen.select('RED'),
-                'BLUE': imagen.select('BLUE')
-            }
-        )
-    elif indice == 'GNDVI':
-        img = imagen.normalizedDifference(['NIR', 'GREEN'])
-    elif indice == 'LSWI':
-        img = imagen.normalizedDifference(['NIR', 'SWIR1'])
-    elif indice == 'NDWI':
-        img = imagen.normalizedDifference(['GREEN', 'NIR'])
-    elif indice == 'MNDWI':
-        img = imagen.normalizedDifference(['GREEN', 'SWIR1'])
-    else:
-        img = imagen.normalizedDifference(['NIR', 'RED'])
+    img_indice = INDICES[indice](imagen)
 
-    return img.rename(indice).clip(zona_estudio)
+    return img_indice.rename(indice).clip(zona_estudio)
+
 # ===============================
-# ESTADISTICAS E INTEPRETACION
+# ESTADÍSTICAS (CACHEADAS)
 # ===============================
-def estadisticas_indice(imagen):
-    stats = imagen.reduceRegion(
+@st.cache_data(show_spinner=False)
+def estadisticas_indice(anio, indice):
+    img = obtener_indice(anio, indice)
+    stats = img.reduceRegion(
         reducer=ee.Reducer.mean()
             .combine(ee.Reducer.min(), '', True)
             .combine(ee.Reducer.max(), '', True),
@@ -115,8 +112,7 @@ def estadisticas_indice(imagen):
         scale=30,
         maxPixels=1e9
     )
-    return stats
-
+    return stats.getInfo()
 
 # ===============================
 # INTERFAZ STREAMLIT
@@ -127,19 +123,20 @@ st.title("Comparación de Índices Landsat – Río Chili")
 with st.sidebar:
     indice = st.selectbox(
         "Índice espectral",
-        ['NDVI', 'SAVI', 'EVI', 'GNDVI', 'LSWI', 'NDWI', 'MNDWI']
+        list(INDICES.keys())
     )
 
-    anio_1 = st.selectbox("Año 1", range(2000, 2026), index=23)
-    anio_2 = st.selectbox("Año 2", range(2000, 2026), index=20)
-    anio_3 = st.selectbox("Año 3", range(2000, 2026), index=17)
+    anios = [
+        st.selectbox("Año 1", range(2000, 2026), index=23),
+        st.selectbox("Año 2", range(2000, 2026), index=20),
+        st.selectbox("Año 3", range(2000, 2026), index=17)
+    ]
 
     opacity = st.slider("Opacidad", 0.0, 1.0, 0.6, 0.1)
 
 # ===============================
-# MAPAS EN PARALELO
+# VISUALIZACIÓN
 # ===============================
-anios = [anio_1, anio_2, anio_3]
 columnas = st.columns(3)
 
 vis_params = {
@@ -179,21 +176,12 @@ for col, anio in zip(columnas, anios):
             key=f"mapa_{indice}_{anio}"
         )
 
-        # ===============================
-        # DATOS CUANTITATIVOS
-        # ===============================
-        stats = estadisticas_indice(imagen).getInfo()
-
-        promedio = stats[indice + '_mean']
-        minimo = stats[indice + '_min']
-        maximo = stats[indice + '_max']
-
+        stats = estadisticas_indice(anio, indice)
 
         st.markdown(
             f"""
-            **{indice} promedio:** {promedio:.3f}  
-            **Valor mínimo:** {minimo:.3f}  
-            **Valor máximo:** {maximo:.3f}  
-
+            **{indice} promedio:** {stats[indice + '_mean']:.3f}  
+            **Valor mínimo:** {stats[indice + '_min']:.3f}  
+            **Valor máximo:** {stats[indice + '_max']:.3f}
             """
         )
