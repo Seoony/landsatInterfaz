@@ -4,14 +4,11 @@ import folium
 from streamlit_folium import st_folium
 import os
 import json
-import tempfile
 
 # ===============================
 # INICIALIZACIÓN GOOGLE EARTH ENGINE
 # ===============================
 try:
-    initialized = False
-
     client_id = os.getenv('EE_CLIENT_ID') or os.getenv('CLIENT_ID')
     client_secret = os.getenv('EE_CLIENT_SECRET') or os.getenv('CLIENT_SECRET')
     refresh_token = os.getenv('EE_REFRESH_TOKEN') or os.getenv('REFRESH_TOKEN')
@@ -23,16 +20,14 @@ try:
             "refresh_token": refresh_token,
             "type": "authorized_user"
         }
-        credentials_dir = os.path.join(os.path.expanduser('~'), '.config', 'earthengine')
+        credentials_dir = os.path.join(
+            os.path.expanduser('~'), '.config', 'earthengine'
+        )
         os.makedirs(credentials_dir, exist_ok=True)
         with open(os.path.join(credentials_dir, 'credentials'), 'w') as f:
             json.dump(oauth_credentials, f)
-        ee.Initialize(project='fourth-return-458106-r5')
-        initialized = True
 
-    if not initialized:
-        ee.Initialize(project='fourth-return-458106-r5')
-        initialized = True
+    ee.Initialize(project='fourth-return-458106-r5')
 
 except Exception as e:
     st.error(f"Error initializing Google Earth Engine: {e}")
@@ -46,16 +41,42 @@ zona_estudio = ee.FeatureCollection(
 ).geometry()
 
 # ===============================
-# FUNCIÓN PARA OBTENER ÍNDICE (AÑO COMPLETO)
+# DEFINICIÓN DE ÍNDICES
 # ===============================
+INDICES = {
+    "NDVI": lambda img: img.normalizedDifference(['NIR', 'RED']),
+    "SAVI": lambda img: img.expression(
+        '(NIR - RED) / (NIR + RED + 0.5) * 1.5',
+        {'NIR': img.select('NIR'), 'RED': img.select('RED')}
+    ),
+    "EVI": lambda img: img.expression(
+        '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
+        {
+            'NIR': img.select('NIR'),
+            'RED': img.select('RED'),
+            'BLUE': img.select('BLUE')
+        }
+    ),
+    "GNDVI": lambda img: img.normalizedDifference(['NIR', 'GREEN']),
+    "LSWI": lambda img: img.normalizedDifference(['NIR', 'SWIR1']),
+    "NDWI": lambda img: img.normalizedDifference(['GREEN', 'NIR']),
+    "MNDWI": lambda img: img.normalizedDifference(['GREEN', 'SWIR1'])
+}
+
+# ===============================
+# OBTENER IMAGEN
+# ===============================
+@st.cache_data(show_spinner=False)
 def obtener_indice(anio, indice):
     fecha_inicio = ee.Date.fromYMD(anio, 1, 1)
     fecha_fin = ee.Date.fromYMD(anio, 12, 31)
 
-    coleccion = ee.ImageCollection(
-        'LANDSAT/LT05/C02/T1_L2' if anio <= 2011
-        else 'LANDSAT/LC08/C02/T1_L2'
-    )
+    if anio <= 2011:
+        coleccion = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+        bandas_origen = ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7']
+    else:
+        coleccion = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+        bandas_origen = ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']
 
     imagen = (
         coleccion
@@ -65,49 +86,21 @@ def obtener_indice(anio, indice):
         .median()
     )
 
-    bandas_l5 = ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7']
-    bandas_l8 = ['SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7']
     bandas_std = ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
-
-    bandas_origen = ee.List(
-        ee.Algorithms.If(anio <= 2011, bandas_l5, bandas_l8)
-    )
 
     imagen = imagen.select(bandas_origen).rename(bandas_std)
 
-    if indice == 'NDVI':
-        img = imagen.normalizedDifference(['NIR', 'RED'])
-    elif indice == 'SAVI':
-        img = imagen.expression(
-            '(NIR - RED) / (NIR + RED + 0.5) * 1.5',
-            {'NIR': imagen.select('NIR'), 'RED': imagen.select('RED')}
-        )
-    elif indice == 'EVI':
-        img = imagen.expression(
-            '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))',
-            {
-                'NIR': imagen.select('NIR'),
-                'RED': imagen.select('RED'),
-                'BLUE': imagen.select('BLUE')
-            }
-        )
-    elif indice == 'GNDVI':
-        img = imagen.normalizedDifference(['NIR', 'GREEN'])
-    elif indice == 'LSWI':
-        img = imagen.normalizedDifference(['NIR', 'SWIR1'])
-    elif indice == 'NDWI':
-        img = imagen.normalizedDifference(['GREEN', 'NIR'])
-    elif indice == 'MNDWI':
-        img = imagen.normalizedDifference(['GREEN', 'SWIR1'])
-    else:
-        img = imagen.normalizedDifference(['NIR', 'RED'])
+    img_indice = INDICES[indice](imagen)
 
-    return img.rename(indice).clip(zona_estudio)
+    return img_indice.rename(indice).clip(zona_estudio)
+
 # ===============================
-# ESTADISTICAS E INTEPRETACION
+# ESTADÍSTICAS
 # ===============================
-def estadisticas_indice(imagen):
-    stats = imagen.reduceRegion(
+@st.cache_data(show_spinner=False)
+def estadisticas_indice(anio, indice):
+    img = obtener_indice(anio, indice)
+    stats = img.reduceRegion(
         reducer=ee.Reducer.mean()
             .combine(ee.Reducer.min(), '', True)
             .combine(ee.Reducer.max(), '', True),
@@ -115,8 +108,51 @@ def estadisticas_indice(imagen):
         scale=30,
         maxPixels=1e9
     )
-    return stats
+    return stats.getInfo()
 
+# ===============================
+# SERIE TEMPORAL
+# ===============================
+@st.cache_data(show_spinner=False)
+def serie_temporal(indice, anio_inicio=2000, anio_fin=2025):
+    datos = []
+
+    for anio in range(anio_inicio, anio_fin + 1):
+        fecha_inicio = ee.Date.fromYMD(anio, 1, 1)
+        fecha_fin = ee.Date.fromYMD(anio, 12, 31)
+
+        if anio <= 2011:
+            coleccion = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+        else:
+            coleccion = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+
+        coleccion = (
+            coleccion
+            .filterDate(fecha_inicio, fecha_fin)
+            .filterBounds(zona_estudio)
+            .filter(ee.Filter.lt('CLOUD_COVER', 20))
+        )
+
+        # 🔑 VERIFICACIÓN CRÍTICA
+        if coleccion.size().getInfo() == 0:
+            datos.append({"Año": anio, "Valor": None})
+            continue
+
+        img = obtener_indice(anio, indice)
+
+        valor = img.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=zona_estudio,
+            scale=30,
+            maxPixels=1e9
+        ).get(indice)
+
+        datos.append({
+            "Año": anio,
+            "Valor": ee.Number(valor).getInfo()
+        })
+
+    return datos
 
 # ===============================
 # INTERFAZ STREAMLIT
@@ -125,75 +161,90 @@ st.set_page_config(layout="wide")
 st.title("Comparación de Índices Landsat – Río Chili")
 
 with st.sidebar:
-    indice = st.selectbox(
-        "Índice espectral",
-        ['NDVI', 'SAVI', 'EVI', 'GNDVI', 'LSWI', 'NDWI', 'MNDWI']
-    )
+    indice = st.selectbox("Índice espectral", list(INDICES.keys()))
 
-    anio_1 = st.selectbox("Año 1", range(2000, 2026), index=23)
-    anio_2 = st.selectbox("Año 2", range(2000, 2026), index=20)
-    anio_3 = st.selectbox("Año 3", range(2000, 2026), index=17)
+    anios = [
+        st.selectbox("Año 1", range(2000, 2026), index=23),
+        st.selectbox("Año 2", range(2000, 2026), index=20),
+        st.selectbox("Año 3", range(2000, 2026), index=17)
+    ]
 
     opacity = st.slider("Opacidad", 0.0, 1.0, 0.6, 0.1)
 
 # ===============================
-# MAPAS EN PARALELO
+# PESTAÑAS
 # ===============================
-anios = [anio_1, anio_2, anio_3]
-columnas = st.columns(3)
+tab_mapas, tab_grafico = st.tabs(
+    ["Mapas y estadísticas", "Gráfico temporal"]
+)
 
-vis_params = {
-    "NDVI": {"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
-    "SAVI": {"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
-    "EVI":  {"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
-    "GNDVI":{"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
-    "LSWI": {"min": -0.5, "max": 0.8, "palette": ["brown", "white", "blue"]},
-    "NDWI": {"min": -0.5, "max": 0.8, "palette": ["white", "cyan", "blue"]},
-    "MNDWI":{"min": -0.5, "max": 0.8, "palette": ["white", "lightblue", "darkblue"]}
-}
+# ===============================
+# TAB 1 – MAPAS Y ESTADÍSTICAS
+# ===============================
+with tab_mapas:
+    columnas = st.columns(3)
 
-for col, anio in zip(columnas, anios):
-    with col:
-        st.subheader(f"{indice} – {anio}")
+    vis_params = {
+        "NDVI": {"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
+        "SAVI": {"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
+        "EVI":  {"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
+        "GNDVI":{"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
+        "LSWI": {"min": -0.5, "max": 0.8, "palette": ["brown", "white", "blue"]},
+        "NDWI": {"min": -0.5, "max": 0.8, "palette": ["white", "cyan", "blue"]},
+        "MNDWI":{"min": -0.5, "max": 0.8, "palette": ["white", "lightblue", "darkblue"]}
+    }
 
-        imagen = obtener_indice(anio, indice)
-        tiles = imagen.getMapId(vis_params[indice])
+    for i, (col, anio) in enumerate(zip(columnas, anios)):
+        with col:
+            st.subheader(f"{indice} – {anio}")
 
-        mapa = folium.Map(
-            location=[-16.42, -71.54],
-            zoom_start=11,
-            tiles="OpenStreetMap"
-        )
+            imagen = obtener_indice(anio, indice)
+            tiles = imagen.getMapId(vis_params[indice])
 
-        folium.TileLayer(
-            tiles=tiles["tile_fetcher"].url_format,
-            attr="Google Earth Engine",
-            overlay=True,
-            opacity=opacity
-        ).add_to(mapa)
+            mapa = folium.Map(
+                location=[-16.42, -71.54],
+                zoom_start=11,
+                tiles="OpenStreetMap"
+            )
 
-        st_folium(
-            mapa,
-            width=450,
-            height=380,
-            key=f"mapa_{indice}_{anio}"
-        )
+            folium.TileLayer(
+                tiles=tiles["tile_fetcher"].url_format,
+                attr="Google Earth Engine",
+                overlay=True,
+                opacity=opacity
+            ).add_to(mapa)
 
-        # ===============================
-        # DATOS CUANTITATIVOS
-        # ===============================
-        stats = estadisticas_indice(imagen).getInfo()
+            st_folium(
+                mapa,
+                width=450,
+                height=380,
+                key=f"mapa_{indice}_{anio}_{i}"
+            )
+            stats = estadisticas_indice(anio, indice)
 
-        promedio = stats[indice + '_mean']
-        minimo = stats[indice + '_min']
-        maximo = stats[indice + '_max']
+            st.markdown(
+                f"""
+                **{indice} promedio:** {stats[indice + '_mean']:.3f}  
+                **Valor mínimo:** {stats[indice + '_min']:.3f}  
+                **Valor máximo:** {stats[indice + '_max']:.3f}
+                """
+            )
 
+# ===============================
+# TAB 2 – GRÁFICO TEMPORAL
+# ===============================
+with tab_grafico:
+    st.subheader(f"Evolución temporal del {indice}")
 
-        st.markdown(
-            f"""
-            **{indice} promedio:** {promedio:.3f}  
-            **Valor mínimo:** {minimo:.3f}  
-            **Valor máximo:** {maximo:.3f}  
+    serie = serie_temporal(indice)
 
-            """
-        )
+    datos = {
+        str(d["Año"]): d["Valor"]
+        for d in serie
+        if d["Valor"] is not None
+    }
+
+    if datos:
+        st.line_chart(datos)
+    else:
+        st.warning("No hay datos suficientes para generar el gráfico.")
