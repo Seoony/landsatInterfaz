@@ -195,6 +195,32 @@ def serie_temporal(indice, anio_inicio=2000, anio_fin=2025):
 
     return serie
 
+# ===============================
+# FUNCIÓN DE GRÁFICO
+# ===============================
+def grafico_rango_anios(serie, anios_seleccionados, titulo):
+
+    anio_inicio = min(anios_seleccionados)
+    anio_fin = max(anios_seleccionados)
+
+    anios = []
+    valores = []
+
+    for d in serie:
+        if (
+            d["Valor"] is not None
+            and anio_inicio <= d["Año"] <= anio_fin
+        ):
+            anios.append(d["Año"])
+            valores.append(d["Valor"])
+
+    if valores:
+        st.subheader(titulo)
+        st.line_chart(
+            {str(a): v for a, v in zip(anios, valores)}
+        )
+    else:
+        st.warning("No hay datos suficientes para generar el gráfico.")
 
 # ===============================
 # INTERFAZ STREAMLIT
@@ -212,6 +238,7 @@ with st.sidebar:
     ]
 
     opacity = st.slider("Opacidad", 0.0, 1.0, 0.6, 0.1)
+    serie = serie_temporal(indice)
 
 # ===============================
 # PESTAÑAS
@@ -225,6 +252,7 @@ tab_mapas, tab_grafico = st.tabs(
 # ===============================
 with tab_mapas:
     columnas = st.columns(3)
+    anios_sel = [anios[0], anios[1], anios[2]]
 
     vis_params = {
         "NDVI": {"min": -0.2, "max": 0.9, "palette": ["brown", "yellow", "green"]},
@@ -272,16 +300,30 @@ with tab_mapas:
                 """
             )
 
+    st.divider()
+    grafico_rango_anios(
+        serie,
+        anios_sel,
+        f"Evolución temporal del {indice} (rango seleccionado)"
+    )
+
 # ===============================
 # TAB 2 – GRÁFICO TEMPORAL
 # ===============================
 with tab_grafico:
-    st.subheader(f"Evolución temporal del {indice}")
-
     serie = serie_temporal(indice)
-
     # ===========================
     # GRÁFICO 1 – SERIE TEMPORAL
+    # ===========================
+    grafico_rango_anios(
+        serie,
+        [2000, 2025],  # rango completo
+        f"Evolución temporal del {indice}"
+    )
+    st.divider()
+
+    # ===========================
+    # GRÁFICO 2 – BOXPLOT
     # ===========================
     anios = []
     valores = []
@@ -291,19 +333,6 @@ with tab_grafico:
             anios.append(d["Año"])
             valores.append(d["Valor"])
 
-    if valores:
-        st.line_chart(
-            {str(a): v for a, v in zip(anios, valores)}
-        )
-    else:
-        st.warning("No hay datos suficientes para generar el gráfico.")
-        st.stop()
-
-    st.divider()
-
-    # ===========================
-    # GRÁFICO 2 – BOXPLOT
-    # ===========================
     st.subheader("Distribución del índice por periodos")
 
     periodo1 = [v for a, v in zip(anios, valores) if 2000 <= a <= 2006]
