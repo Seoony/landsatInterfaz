@@ -8,7 +8,6 @@ from Core.gee_init import asegurar_zona_estudio
 # ===============================
 # CONTEXTO COMPARTIDO
 # ===============================
-st.set_page_config(layout="wide")
 zona_estudio = asegurar_zona_estudio()
 
 # ===============================
@@ -276,3 +275,4 @@ with tab_graficos:
         **Desviación estándar:** {std:.4f}
         """
     )
+
