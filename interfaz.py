@@ -4,6 +4,7 @@ import folium
 from streamlit_folium import st_folium
 import os
 import json
+import plotly.graph_objects as go
 
 # ===============================
 # INICIALIZACIÓN GOOGLE EARTH ENGINE
@@ -87,12 +88,12 @@ def obtener_indice(anio, indice):
     )
 
     bandas_std = ['BLUE', 'GREEN', 'RED', 'NIR', 'SWIR1', 'SWIR2']
-
     imagen = imagen.select(bandas_origen).rename(bandas_std)
 
-    img_indice = INDICES[indice](imagen)
+    img_indice = INDICES[indice](imagen).rename(indice)
 
-    return img_indice.rename(indice).clip(zona_estudio)
+    return img_indice.clip(zona_estudio)
+
 
 # ===============================
 # ESTADÍSTICAS
@@ -115,16 +116,19 @@ def estadisticas_indice(anio, indice):
 # ===============================
 @st.cache_data(show_spinner=False)
 def serie_temporal(indice, anio_inicio=2000, anio_fin=2025):
-    datos = []
 
-    for anio in range(anio_inicio, anio_fin + 1):
+    def calcular_valor(anio):
+        anio = ee.Number(anio)
         fecha_inicio = ee.Date.fromYMD(anio, 1, 1)
         fecha_fin = ee.Date.fromYMD(anio, 12, 31)
 
-        if anio <= 2011:
-            coleccion = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
-        else:
-            coleccion = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+        coleccion = ee.ImageCollection(
+            ee.Algorithms.If(
+                anio.lte(2011),
+                ee.ImageCollection('LANDSAT/LE07/C02/T1_L2'),
+                ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+            )
+        )
 
         coleccion = (
             coleccion
@@ -133,26 +137,64 @@ def serie_temporal(indice, anio_inicio=2000, anio_fin=2025):
             .filter(ee.Filter.lt('CLOUD_COVER', 20))
         )
 
-        # 🔑 VERIFICACIÓN CRÍTICA
-        if coleccion.size().getInfo() == 0:
-            datos.append({"Año": anio, "Valor": None})
-            continue
+        size = coleccion.size()
 
-        img = obtener_indice(anio, indice)
+        def calcular_indice():
+            imagen = coleccion.median()
 
-        valor = img.reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=zona_estudio,
-            scale=30,
-            maxPixels=1e9
-        ).get(indice)
+            bandas_origen = ee.List(
+                ee.Algorithms.If(
+                    anio.lte(2011),
+                    ['SR_B1','SR_B2','SR_B3','SR_B4','SR_B5','SR_B7'],
+                    ['SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7']
+                )
+            )
 
-        datos.append({
-            "Año": anio,
-            "Valor": ee.Number(valor).getInfo()
+            bandas_std = ['BLUE','GREEN','RED','NIR','SWIR1','SWIR2']
+            imagen = imagen.select(bandas_origen).rename(bandas_std)
+
+            img_indice = INDICES[indice](imagen).rename(indice)
+
+            reduccion = img_indice.reduceRegion(
+                reducer=ee.Reducer.mean(),
+                geometry=zona_estudio,
+                scale=30,
+                maxPixels=1e9
+            )
+
+            return ee.Algorithms.If(
+                reduccion.contains(indice),
+                reduccion.get(indice),
+                None
+            )
+
+        valor = ee.Algorithms.If(
+            size.gt(0),
+            calcular_indice(),
+            None
+        )
+
+        return ee.Feature(None, {
+            'Año': anio,
+            'Valor': valor
         })
 
-    return datos
+    fc = ee.FeatureCollection(
+        ee.List.sequence(anio_inicio, anio_fin).map(calcular_valor)
+    )
+
+    datos = fc.getInfo()
+
+    serie = []
+    for f in datos['features']:
+        props = f['properties']
+        serie.append({
+            "Año": int(props['Año']),
+            "Valor": props.get('Valor')
+        })
+
+    return serie
+
 
 # ===============================
 # INTERFAZ STREAMLIT
@@ -175,7 +217,7 @@ with st.sidebar:
 # PESTAÑAS
 # ===============================
 tab_mapas, tab_grafico = st.tabs(
-    ["Mapas y estadísticas", "Gráfico temporal"]
+    ["Mapas y estadísticas", "Gráficos Analíticos"]
 )
 
 # ===============================
@@ -238,13 +280,119 @@ with tab_grafico:
 
     serie = serie_temporal(indice)
 
-    datos = {
-        str(d["Año"]): d["Valor"]
-        for d in serie
-        if d["Valor"] is not None
-    }
+    # ===========================
+    # GRÁFICO 1 – SERIE TEMPORAL
+    # ===========================
+    anios = []
+    valores = []
 
-    if datos:
-        st.line_chart(datos)
+    for d in serie:
+        if d["Valor"] is not None:
+            anios.append(d["Año"])
+            valores.append(d["Valor"])
+
+    if valores:
+        st.line_chart(
+            {str(a): v for a, v in zip(anios, valores)}
+        )
     else:
         st.warning("No hay datos suficientes para generar el gráfico.")
+        st.stop()
+
+    st.divider()
+
+    # ===========================
+    # GRÁFICO 2 – BOXPLOT
+    # ===========================
+    st.subheader("Distribución del índice por periodos")
+
+    periodo1 = [v for a, v in zip(anios, valores) if 2000 <= a <= 2006]
+    periodo2 = [v for a, v in zip(anios, valores) if 2007 <= a <= 2012]
+    periodo3 = [v for a, v in zip(anios, valores) if 2013 <= a <= 2025]
+
+    fig_box = go.Figure()
+
+    if periodo1:
+        fig_box.add_trace(go.Box(y=periodo1, name="2000–2006", marker_color="red"))
+    if periodo2:
+        fig_box.add_trace(go.Box(y=periodo2, name="2007–2012", marker_color="orange"))
+    if periodo3:
+        fig_box.add_trace(go.Box(y=periodo3, name="2013–2025", marker_color="green"))
+
+    fig_box.update_layout(
+        yaxis_title=indice,
+        boxmode="group"
+    )
+
+    st.plotly_chart(fig_box, use_container_width=True)
+
+    st.divider()
+
+    # ===========================
+    # GRÁFICO 3 – ANOMALÍAS
+    # ===========================
+    st.subheader("Análisis de anomalías")
+
+    valores = [
+        d["Valor"] for d in serie if d["Valor"] is not None
+    ]
+    anios_validos = [
+        d["Año"] for d in serie if d["Valor"] is not None
+    ]
+    media = sum(valores) / len(valores)
+
+    # Desviación estándar
+    varianza = sum((v - media) ** 2 for v in valores) / len(valores)
+    std = varianza ** 0.5
+
+    anomalias = [v - media for v in valores]
+
+    # ===============================
+    # Clasificación por severidad
+    # ===============================
+    colores = []
+
+    for a in anomalias:
+        if abs(a) >= std:
+            colores.append("darkgreen" if a > 0 else "darkred")
+        elif abs(a) >= 0.5 * std:
+            colores.append("green" if a > 0 else "red")
+        else:
+            colores.append("lightgreen" if a > 0 else "lightcoral")
+
+    # ===============================
+    # Gráfico de anomalías
+    # ===============================
+    fig_anom = go.Figure()
+
+    fig_anom.add_trace(go.Bar(
+        x=anios_validos,
+        y=anomalias,
+        marker_color=colores,
+        name="Anomalía"
+    ))
+
+    fig_anom.add_hline(
+        y=0,
+        line_width=2,
+        line_color="black"
+    )
+
+    fig_anom.update_layout(
+        title=f"Anomalías del {indice} respecto al promedio histórico",
+        xaxis_title="Año",
+        yaxis_title="Anomalía",
+        showlegend=False
+    )
+
+    st.plotly_chart(fig_anom, use_container_width=True)
+
+    # ===============================
+    # Mostrar valores estadísticos
+    # ===============================
+    st.markdown(
+        f"""
+        **Promedio histórico:** {media:.4f}  
+        **Desviación estándar:** {std:.4f}
+        """
+    )
