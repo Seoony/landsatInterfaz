@@ -7,9 +7,6 @@ from Core.gee_init import asegurar_zona_estudio
 # ===============================
 # INICIALIZACIÓN Y CONTEXTO
 # ===============================
-st.set_page_config(page_title="Exploración Espacial", layout="wide")
-
-# Asegurar que GEE y la zona de estudio estén inicializados
 zona_estudio = asegurar_zona_estudio()
 
 # ===============================
@@ -97,5 +94,6 @@ folium.TileLayer(
     overlay=True,
     opacity=opacidad
 ).add_to(mapa)
+
 
 st_folium(mapa, width=1200, height=650, key=f"mapa_{indice}_{anio}_{opacidad}")
