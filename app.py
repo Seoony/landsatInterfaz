@@ -35,7 +35,7 @@ st.markdown("""
 Este sistema permite analizar índices espectrales derivados de imágenes Landsat 
 para la cuenca del Río Chili, Arequipa.
 
-###Funcionalidades disponibles:
+## Funcionalidades disponibles:
 
 **Exploración Espacial**
 - Visualiza índices espectrales de un año específico
@@ -48,7 +48,7 @@ para la cuenca del Río Chili, Arequipa.
 - Analiza anomalías y tendencias
 - Estadísticas por periodo
 
-###Índices disponibles:
+## Índices disponibles:
 - **NDVI** - Índice de Vegetación Normalizado
 - **SAVI** - Índice de Vegetación Ajustado al Suelo
 - **EVI** - Índice de Vegetación Mejorado
