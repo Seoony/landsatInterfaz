@@ -3,7 +3,7 @@ from Core.gee_init import inicializar_gee, obtener_zona_estudio
 
 # SOLO el archivo principal tiene st.set_page_config
 st.set_page_config(
-    page_title="Sistema de Análisis Landsat – Río Chili",
+    page_title="Sistema de Análisis Landsat – Uchumayo",
     layout="wide",
 )
 
@@ -27,13 +27,14 @@ if "zona_estudio" not in st.session_state:
 # ===============================
 # PÁGINA DE INICIO
 # ===============================
-st.title("Sistema de Análisis Landsat – Río Chili")
+st.title("Sistema de Análisis Landsat – Uchumayo")
 
 st.markdown("""
 ## Bienvenido al Sistema de Análisis Multitemporal
 
-Este sistema permite analizar índices espectrales derivados de imágenes Landsat 
-para la cuenca del Río Chili, Arequipa.
+Este sistema permite analizar la degradación de suelos debido a las 
+emisiones del parque automotor en el sector de Uchumayo - Arequipa, 
+usando la tecnología satelital georreferencial .
 
 ## Funcionalidades disponibles:
 
@@ -64,7 +65,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.info("Zona de estudio cargada correctamente")
-    st.info("**Área de estudio:** Cuenca Río Chili, Uchumayo")
+    st.info("**Área de estudio:** Uchumayo - Arequipa")
 
 with col2:
     st.info("**Período disponible:** 2000 - 2025")
