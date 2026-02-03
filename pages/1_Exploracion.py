@@ -9,6 +9,15 @@ from Core.gee_init import asegurar_zona_estudio
 # ===============================
 zona_estudio = asegurar_zona_estudio()
 
+# =========================
+# PUNTOS DE MUESTREO
+# =========================
+puntos = ee.FeatureCollection([
+    ee.Feature(ee.Geometry.Point([-71.5982778, -16.4557667]), {'nombre': 'Punto 1'}),
+    ee.Feature(ee.Geometry.Point([-71.5979417, -16.4553806]), {'nombre': 'Punto 2'}),
+    ee.Feature(ee.Geometry.Point([-71.6313639, -16.4287806]), {'nombre': 'Punto 3'})
+])
+
 # ===============================
 # DEFINICIÓN DE ÍNDICES
 # ===============================
@@ -69,6 +78,21 @@ def obtener_imagen(anio, indice, _zona_estudio):
 
     return INDICES[indice](imagen).rename(indice).clip(_zona_estudio)
 
+def agregar_puntos_muestreo(mapa, puntos):
+    puntos_geojson = puntos.getInfo()
+
+    for f in puntos_geojson["features"]:
+        coords = f["geometry"]["coordinates"]
+        nombre = f["properties"].get("nombre", "Punto")
+
+        folium.Marker(
+            location=[coords[1], coords[0]],
+            popup=nombre,
+            icon=folium.Icon(color="red", icon="info-sign")
+        ).add_to(mapa)
+
+
+
 # ===============================
 # INTERFAZ
 # ===============================
@@ -95,5 +119,6 @@ folium.TileLayer(
     opacity=opacidad
 ).add_to(mapa)
 
+agregar_puntos_muestreo(mapa, puntos)
 
 st_folium(mapa, width=1200, height=650, key=f"mapa_{indice}_{anio}_{opacidad}")
