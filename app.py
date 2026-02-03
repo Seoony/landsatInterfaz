@@ -3,7 +3,7 @@ from Core.gee_init import inicializar_gee, obtener_zona_estudio
 
 # SOLO el archivo principal tiene st.set_page_config
 st.set_page_config(
-    page_title="Sistema de Análisis Landsat – Río Chili",
+    page_title="Aplicación para el análisis de la degradación de suelos",
     layout="wide",
 )
 
@@ -27,7 +27,7 @@ if "zona_estudio" not in st.session_state:
 # ===============================
 # PÁGINA DE INICIO
 # ===============================
-st.title("Sistema de Análisis Landsat – Río Chili")
+st.title("Aplicación para el análisis de la degradación de suelos")
 
 st.markdown("""
 ## Bienvenido al Sistema de Análisis Multitemporal
