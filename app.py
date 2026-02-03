@@ -3,7 +3,11 @@ from Core.gee_init import inicializar_gee, obtener_zona_estudio
 
 # SOLO el archivo principal tiene st.set_page_config
 st.set_page_config(
+<<<<<<< HEAD
     page_title="Aplicación para el análisis de la degradación de suelos",
+=======
+    page_title="Sistema de Análisis Landsat – Uchumayo",
+>>>>>>> c949d7606a8595eade179c1f73b51f349778783c
     layout="wide",
 )
 
@@ -27,13 +31,18 @@ if "zona_estudio" not in st.session_state:
 # ===============================
 # PÁGINA DE INICIO
 # ===============================
+<<<<<<< HEAD
 st.title("Aplicación para el análisis de la degradación de suelos")
+=======
+st.title("Sistema de Análisis Landsat – Uchumayo")
+>>>>>>> c949d7606a8595eade179c1f73b51f349778783c
 
 st.markdown("""
 ## Bienvenido al Sistema de Análisis Multitemporal
 
-Este sistema permite analizar índices espectrales derivados de imágenes Landsat 
-para la cuenca del Río Chili, Arequipa.
+Este sistema permite analizar la degradación de suelos debido a las 
+emisiones del parque automotor en el sector de Uchumayo - Arequipa, 
+usando la tecnología satelital georreferencial .
 
 ## Funcionalidades disponibles:
 
@@ -64,7 +73,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.info("Zona de estudio cargada correctamente")
-    st.info("**Área de estudio:** Cuenca Río Chili, Uchumayo")
+    st.info("**Área de estudio:** Uchumayo - Arequipa")
 
 with col2:
     st.info("**Período disponible:** 2000 - 2025")
