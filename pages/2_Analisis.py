@@ -193,14 +193,14 @@ with tab_mapas:
             stats = estadisticas_indice(anio, indice)
             st.markdown(
                 f"""
-                **Promedio:** {stats[indice+'_mean']:.3f}  
-                **Mínimo:** {stats[indice+'_min']:.3f}  
-                **Máximo:** {stats[indice+'_max']:.3f}
+                **Promedio Anual:** {stats[indice+'_mean']:.3f}  
+                **Valor mínimo:** {stats[indice+'_min']:.3f}  
+                **Valor máximo:** {stats[indice+'_max']:.3f}
                 """
             )
 
     st.divider()
-    st.subheader("Evolución temporal (rango seleccionado)")
+    st.subheader("Evolución temporal (Rango seleccionado)")
 
     rango = [d for d in serie if d["Valor"] is not None and min(anios_sel) <= d["Año"] <= max(anios_sel)]
     if rango:
@@ -215,6 +215,11 @@ with tab_graficos:
     st.subheader(f"Evolución temporal del {indice}")
     completos = [d for d in serie if d["Valor"] is not None]
     st.line_chart({str(d["Año"]): d["Valor"] for d in completos})
+    st.caption(
+    "Este gráfico representa la evolución temporal del índice espectral seleccionado, "
+    "permitiendo identificar tendencias de incremento o disminución asociadas a procesos "
+    "de degradación o recuperación del suelo en el área de estudio."
+    )
 
     st.divider()
     st.subheader(f"Distribución del {indice} por periodos")
@@ -228,6 +233,11 @@ with tab_graficos:
     fig.add_trace(go.Box(y=[v for a,v in zip(anios,valores) if a>=2013], name="2013–2025", marker_color="green"))
 
     st.plotly_chart(fig, use_container_width=True)
+    st.caption(
+    "El gráfico de distribución por periodos permite analizar la variabilidad de los valores "
+    "del índice espectral en distintos intervalos temporales, facilitando la comparación "
+    "de la dispersión y estabilidad de los datos."
+    )
 
     st.divider()
     st.subheader(f"Análisis de anomalías del {indice}")
@@ -268,7 +278,11 @@ with tab_graficos:
     )
 
     st.plotly_chart(fig2, use_container_width=True)
-
+    st.caption(
+    "Este gráfico identifica valores atípicos que se desvían del comportamiento promedio "
+    "del índice espectral, los cuales pueden estar asociados a eventos ambientales extremos "
+    "o cambios abruptos en las condiciones del suelo."
+    )
     st.markdown(
         f"""
         **Promedio histórico:** {media:.4f}  
