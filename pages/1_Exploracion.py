@@ -236,4 +236,9 @@ folium.TileLayer(
 
 agregar_puntos_muestreo(mapa, puntos, tabla_puntos)
 
-st_folium(mapa, width=1200, height=650, key=f"mapa_{indice}_{anio}_{opacidad}")
+st_folium(
+    mapa,
+    width="100%",
+    height=700,
+    key=f"mapa_{indice}_{anio}_{opacidad}"
+)
