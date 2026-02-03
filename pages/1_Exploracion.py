@@ -25,7 +25,7 @@ puntos = ee.FeatureCollection([
 # ===============================
 # CARGA DE TABLA GOOGLE SHEETS
 # ===============================
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def cargar_tabla_sheets_xlsx(url):
     df = pd.read_excel(url)
 
@@ -204,6 +204,10 @@ with st.sidebar:
     indice = st.selectbox("Índice espectral", list(INDICES.keys()))
     anio = st.selectbox("Año", range(2000, 2026), index=23)
     opacidad = st.slider("Opacidad", 0.0, 1.0, 0.7, 0.1)
+
+    # Botón para forzar actualización de datos
+    if st.button("Actualizar datos"):
+        st.cache_data.clear()
 
     imagen = obtener_imagen(anio, indice, zona_estudio)
     tiles = imagen.getMapId(VIS_PARAMS[indice])
