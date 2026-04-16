@@ -53,7 +53,7 @@ def cargar_tabla_sheets_xlsx(url):
 
     return df
 
-URL_SHEETS = "https://docs.google.com/spreadsheets/d/1evuHb1pnQimVVANNiWo4z7qY_zy8BtPZ/export?format=xlsx"
+URL_SHEETS = "https://docs.google.com/spreadsheets/d/1yQ3TJRpGAGqSnSfGgQP4c9UwwDt-RZwS/export?format=xlsx"
 tabla_puntos = cargar_tabla_sheets_xlsx(URL_SHEETS)
 
 def imagen_a_base64(ruta):
