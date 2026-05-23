@@ -10,6 +10,11 @@ def obtener_indice(anio, indice):
     if anio <= 2011:
         coleccion = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2")
         bandas_origen = ["SR_B1","SR_B2","SR_B3","SR_B4","SR_B5","SR_B7"]
+    elif anio == 2012:
+        coleccion5 = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2')
+        coleccion7 = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+        coleccion = coleccion5.merge(coleccion7)
+        bandas_origen = ["SR_B1","SR_B2","SR_B3","SR_B4","SR_B5","SR_B7"]
     else:
         coleccion = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
         bandas_origen = ["SR_B2","SR_B3","SR_B4","SR_B5","SR_B6","SR_B7"]
