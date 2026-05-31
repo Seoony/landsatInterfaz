@@ -1,72 +1,69 @@
 import streamlit as st
 from Core.gee_init import inicializar_gee, obtener_zona_estudio
-
-# SOLO el archivo principal tiene st.set_page_config
+ 
 st.set_page_config(
-    page_title="Aplicación para el análisis de la degradación de suelos",
+    page_title="Análisis de degradación de suelos – Uchumayo",
     layout="wide",
 )
-
-# Inicializar GEE primero
+ 
+# ── Inicializar GEE ──────────────────────────────────────────────────────────
 try:
     inicializar_gee()
 except Exception as e:
     st.error(f"Error al inicializar Google Earth Engine: {str(e)}")
-    st.info("Por favor, verifica tus credenciales de GEE en las variables de entorno.")
+    st.info("Verifica tus credenciales de GEE en las variables de entorno.")
     st.stop()
-
-# Luego obtener la zona de estudio
+ 
+# ── Cargar zona de estudio una sola vez ──────────────────────────────────────
 if "zona_estudio" not in st.session_state:
     try:
         st.session_state["zona_estudio"] = obtener_zona_estudio()
     except Exception as e:
         st.error(f"Error al cargar la zona de estudio: {str(e)}")
-        st.info("Verifica que el asset 'projects/fourth-return-458106-r5/assets/uchumayo' exista y sea accesible.")
+        st.info("Verifica que el asset 'projects/fourth-return-458106-r5/assets/uchumayo' exista.")
         st.stop()
-
-# ===============================
-# PÁGINA DE INICIO
-# ===============================
+ 
+# ── Página de inicio ─────────────────────────────────────────────────────────
 st.title("Aplicación para el análisis de la degradación de suelos")
-
+ 
 st.markdown("""
 ## Bienvenido al Sistema de Análisis Multitemporal
-
-Este sistema permite analizar la degradación de suelos debido a las 
-emisiones del parque automotor en el sector de Uchumayo - Arequipa, 
-usando la tecnología satelital georreferencial .
-
-## Funcionalidades disponibles:
-
+ 
+Este sistema permite analizar la degradación de suelos debido a las emisiones
+del parque automotor en el sector de **Uchumayo – Arequipa**, usando tecnología
+satelital georreferencial.
+ 
+## Funcionalidades disponibles
+ 
 **Exploración Espacial**
 - Visualiza índices espectrales de un año específico
 - Explora diferentes índices de vegetación y agua
 - Ajusta la opacidad de las capas
-
+ 
 **Análisis Multitemporal**
 - Compara 3 años diferentes simultáneamente
-- Visualiza series temporales (2000-2025)
+- Visualiza series temporales (2000–2025)
 - Analiza anomalías y tendencias
 - Estadísticas por periodo
-
-## Índices disponibles:
-- **NDVI** - Índice de Vegetación Normalizado
-- **SAVI** - Índice de Vegetación Ajustado al Suelo
-- **EVI** - Índice de Vegetación Mejorado
-- **GNDVI** - Índice Verde Normalizado
-- **LSWI** - Índice de Agua en Onda Corta
-- **NDWI** - Índice de Agua Normalizado
-- **MNDWI** - Índice de Agua Modificado
-
+ 
+## Índices disponibles
+| Índice | Descripción |
+|--------|-------------|
+| **NDVI**  | Índice de Vegetación Normalizado |
+| **SAVI**  | Índice de Vegetación Ajustado al Suelo |
+| **EVI**   | Índice de Vegetación Mejorado |
+| **GNDVI** | Índice Verde Normalizado |
+| **LSWI**  | Índice de Agua en Onda Corta |
+| **NDWI**  | Índice de Agua Normalizado |
+| **MNDWI** | Índice de Agua Modificado |
+ 
 ---
 """)
-
+ 
 col1, col2 = st.columns(2)
-
 with col1:
-    st.info("Zona de estudio cargada correctamente")
-    st.info("**Área de estudio:** Uchumayo - Arequipa")
-
+    st.success("✅ Zona de estudio cargada correctamente")
+    st.info("📍 **Área de estudio:** Uchumayo – Arequipa")
 with col2:
-    st.info("**Período disponible:** 2000 - 2025")
-    st.info("**Satélites:** Landsat 7 (2000-2011) y Landsat 8 (2012-2025)")
+    st.info("📅 **Período disponible:** 2000 – 2025")
+    st.info("🛰️ **Satélites:** Landsat 7 (2000–2011) · Landsat 8 (2013–2025)")
