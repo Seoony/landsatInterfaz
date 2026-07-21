@@ -64,7 +64,7 @@ with tab_mapas:
         st.warning("No hay datos suficientes para el rango seleccionado.")
 
     MENSAJES_EVOLUCION = {
-        "NDVI": f"Según la tendencia del valor de este índice vemos que se ha incrementado relativamente con el correr" 
+        "NDVI": f"Según la tendencia del valor de este índice vemos que se ha incrementado relativamente con el correr " 
                 "de los años, pero sin embargo es muy bajo estando en centésimos, que indica que hay perdida de cobertura vegetal, aun baja.",
         "SAVI": "Según la tendencia del valor de este índice vemos que se ha incrementado relativamente con el correr de los años, es relativamente "
                 "un poco mayor el NAVI pero sin embargo es muy bajo estando en rango de centésimos, lo cual sigue indicando que hay perdida de cobertura "
